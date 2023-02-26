@@ -5,13 +5,20 @@
 
 /* Implementation of class "MessageQueue" */
 
-/* 
+ 
 template <typename T>
 T MessageQueue<T>::receive()
 {
     // FP.5a : The method receive should use std::unique_lock<std::mutex> and _condition.wait() 
     // to wait for and receive new messages and pull them from the queue using move semantics. 
-    // The received object should then be returned by the receive function. 
+    // The received object should then be returned by the receive function.
+
+     std::unique_lock<std::mutex> uLock(_mutex);
+     _cond.wait(uLock, [this] {return !_messages.empty(); });
+
+     T msg = std::move(_messages.back());
+
+     return msg;
 }
 
 template <typename T>
@@ -19,8 +26,16 @@ void MessageQueue<T>::send(T &&msg)
 {
     // FP.4a : The method send should use the mechanisms std::lock_guard<std::mutex> 
     // as well as _condition.notify_one() to add a new message to the queue and afterwards send a notification.
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // for testing purposes
+
+    std::lock_guard<std::mutex> lock(_mutex);
+
+    _messages.push_back(std::move(msg));
+    _cond.notify_one();
+
 }
-*/
+
 
 /* Implementation of class "TrafficLight" */
 
@@ -30,12 +45,18 @@ TrafficLight::TrafficLight()
     _currentPhase = TrafficLightPhase::red;
 }
 
-//void TrafficLight::waitForGreen()
-//{
-//    // FP.5b : add the implementation of the method waitForGreen, in which an infinite while-loop 
-//    // runs and repeatedly calls the receive function on the message queue. 
-//    // Once it receives TrafficLightPhase::green, the method returns.
-//}
+void TrafficLight::waitForGreen()
+{
+    // FP.5b : add the implementation of the method waitForGreen, in which an infinite while-loop 
+    // runs and repeatedly calls the receive function on the message queue. 
+    // Once it receives TrafficLightPhase::green, the method returns.
+
+    while(true)
+    {
+        TrafficLightPhase phase = _lightPhaseMessages.receive();
+        return;
+    }
+}
 
 TrafficLightPhase TrafficLight::getCurrentPhase()
 {
@@ -71,6 +92,7 @@ void TrafficLight::cycleThroughPhases()
             case red:
             {
                 _currentPhase = green;
+                _lightPhaseMessages.send(std::move(TrafficLightPhase{green}));
                 break;
             }  
             case green:
