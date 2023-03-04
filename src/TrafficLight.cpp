@@ -27,8 +27,6 @@ void MessageQueue<T>::send(T &&msg)
     // FP.4a : The method send should use the mechanisms std::lock_guard<std::mutex> 
     // as well as _condition.notify_one() to add a new message to the queue and afterwards send a notification.
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // for testing purposes
-
     std::lock_guard<std::mutex> lock(_mutex);
 
     _messages.push_back(std::move(msg));
@@ -53,8 +51,10 @@ void TrafficLight::waitForGreen()
 
     while(true)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         TrafficLightPhase phase = _lightPhaseMessages.receive();
-        return;
+        //std::cout << "The light phase is " << phase << std::endl;
+        if(phase == green) return;
     }
 }
 
@@ -82,25 +82,40 @@ void TrafficLight::cycleThroughPhases()
     std::random_device def;
     std::mt19937 rng(def());
     std::uniform_int_distribution<std::mt19937::result_type> dist6(4,6);
+
+    auto wait_time = std::chrono::seconds(dist6(rng));
+    auto begin = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
     
     while(true)
     {
-        std::this_thread::sleep_for(std::chrono::seconds(dist6(rng)));
         
-        switch ( _currentPhase )
+        now = std::chrono::steady_clock::now();
+
+        if((now-begin) >= wait_time)
         {
-            case red:
+        
+            switch ( _currentPhase )
             {
-                _currentPhase = green;
-                _lightPhaseMessages.send(std::move(TrafficLightPhase{green}));
-                break;
-            }  
-            case green:
-            {
-                _currentPhase = red;
-                break;
+                case red:
+                {
+                    _currentPhase = green;
+                    _lightPhaseMessages.send(std::move(TrafficLightPhase{green}));
+                    break;
+                }  
+                case green:
+                {
+                    _currentPhase = red;
+                    _lightPhaseMessages.send(std::move(TrafficLightPhase{red}));
+                    break;
+                }
             }
+
+            begin = now;
         }
+       
+
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
 
     } 
 }
